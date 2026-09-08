@@ -187,20 +187,37 @@ export class TransactionsService {
         message: 'Transaction already rolled back',
       };
     }
+// 2. Find the first price update for this SKU
+const firstTransaction =
+  await this.transactionRepository.findOne({
+    where: {
+      sku: originalTransaction.sku,
+      operation: 'PRICE_UPDATE',
+    },
+    order: {
+      createdAt: 'ASC',
+    },
+  });
 
-    // 2. Find snapshot
-    const snapshot =
-      await this.snapshotRepository.findOne({
-        where: {
-          transactionId: originalTransaction.id,
-        },
-      });
+if (!firstTransaction) {
+  throw new NotFoundException(
+    'Original transaction not found',
+  );
+}
 
-    if (!snapshot) {
-      throw new NotFoundException(
-        'Snapshot not found',
-      );
-    }
+// 2a. Find the original snapshot
+const originalSnapshot =
+  await this.snapshotRepository.findOne({
+    where: {
+      transactionId: firstTransaction.id,
+    },
+  });
+
+if (!originalSnapshot) {
+  throw new NotFoundException(
+    'Original snapshot not found',
+  );
+}
 
     // 3. Find product
     const product =
@@ -218,8 +235,8 @@ export class TransactionsService {
 
     const currentPrice = Number(product.price);
     const restoredPrice = Number(
-      snapshot.previousPrice,
-    );
+  originalSnapshot.previousPrice,
+);
 
     // 4. Restore old price
     product.price = restoredPrice;
